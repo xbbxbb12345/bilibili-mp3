@@ -2,50 +2,47 @@ import os
 import tempfile
 import streamlit as st
 import yt_dlp
-from pydub import AudioSegment
 
+# 页面配置
 st.set_page_config(page_title="B站视频转MP3", page_icon="🎵")
-
-st.title("🎵 B站视频 → MP3 转换器")
-st.markdown("粘贴哔哩哔哩视频链接，自动提取音频并转为MP3下载")
+st.title("🎧 B站视频 → MP3 转换器")
+st.markdown("粘贴哔哩哔哩视频链接，自动提取音频并转为 MP3 下载")
 
 # 输入框
-url = st.text_input("请输入B站视频链接", placeholder="https://www.bilibili.com/video/BV1xx411c7mD")
+link = st.text_input("请输入B站视频链接", placeholder="https://www.bilibili.com/video/BV...")
 
-if st.button("开始转换") and url:
-    with st.spinner("正在处理，请稍候..."):
-        try:
-            # 创建临时目录
-            with tempfile.TemporaryDirectory() as tmpdir:
-                # 下载音频
-                ydl_opts = {
-                    'format': 'bestaudio/best',
-                    'postprocessors': [{
-                        'key': 'FFmpegExtractAudio',
-                        'preferredcodec': 'mp3',
-                        'preferredquality': '192',
-                    }],
-                    'outtmpl': os.path.join(tmpdir, 'audio.%(ext)s'),
-                    'quiet': True,
-                }
+# 按下按钮时处理
+if st.button("开始转换") and link:
+    try:
+        # 创建临时文件夹（用完自动删除）
+        with tempfile.TemporaryDirectory() as tmpdir:
+            ydl_opts = {
+                'format': 'bestaudio/best',                     # 下载最优音频
+                'outtmpl': os.path.join(tmpdir, '%(title)s.%(ext)s'),
+                'postprocessors': [{
+                    'key': 'FFmpegExtractAudio',               # 用FFmpeg提取音频
+                    'preferredcodec': 'mp3',                   # 转成mp3格式
+                    'preferredquality': '192',                 # 音质192kbps
+                }],
+                'quiet': True,
+                'no_warnings': True,
+            }
+
+            with st.spinner("正在下载并转换音频，请稍候..."):
                 with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-                    ydl.download([url])
+                    info = ydl.extract_info(link, download=True)
+                    # 获取转换前文件名，推算最终的 mp3 文件路径
+                    file_name = ydl.prepare_filename(info)
+                    mp3_path = file_name.rsplit('.', 1)[0] + '.mp3'
 
-                # 查找生成的MP3文件
-                mp3_files = [f for f in os.listdir(tmpdir) if f.endswith('.mp3')]
-                if mp3_files:
-                    mp3_path = os.path.join(tmpdir, mp3_files[0])
-                    # 读取文件供下载
-                    with open(mp3_path, 'rb') as f:
-                        audio_data = f.read()
-                    st.success("✅ 转换成功！点击下方按钮下载")
-                    st.download_button(
-                        label="📥 下载MP3",
-                        data=audio_data,
-                        file_name=mp3_files[0],
-                        mime="audio/mpeg"
-                    )
-                else:
-                    st.error("未找到生成的MP3文件")
-        except Exception as e:
-            st.error(f"转换失败，请检查链接是否正确或稍后重试。错误信息：{e}")
+            # 将转换好的 mp3 提供给用户下载
+            with open(mp3_path, 'rb') as f:
+                st.download_button(
+                    label="📥 下载 MP3",
+                    data=f,
+                    file_name=os.path.basename(mp3_path),
+                    mime="audio/mpeg"
+                )
+            st.success("转换完成！点击上方按钮下载。")
+    except Exception as e:
+        st.error(f"转换失败，请检查链接是否正确或稍后重试。错误信息：{e}")
